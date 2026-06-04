@@ -499,12 +499,21 @@ async function serveCommand(cwd: string): Promise<void> {
 
 async function uiCommand(args: string[], cwd: string): Promise<void> {
   const port = Number(optionValue(args, "--port") ?? "7337");
-  const loaded = await loadConfig(cwd);
-  const store = new SqliteMemoryStore(loaded.dbPath);
-  await syncConfiguredRepositories(store, loaded);
   const staticDir = new URL("../../../ui/dist", import.meta.url).pathname;
   const cliPath = new URL("../../../dist/src/cli/index.js", import.meta.url).pathname;
-  await serveHttp(store, loaded, { port, staticDir, cliPath, workspaceRoot: loaded.workspaceRoot });
+
+  let loaded: Awaited<ReturnType<typeof loadConfig>> | null = null;
+  let store: SqliteMemoryStore | null = null;
+
+  try {
+    loaded = await loadConfig(cwd);
+    store = new SqliteMemoryStore(loaded.dbPath);
+    await syncConfiguredRepositories(store, loaded);
+  } catch {
+    // No workspace configured yet — start in setup mode
+  }
+
+  await serveHttp(store, loaded, { port, staticDir, cliPath, initialCwd: cwd });
   console.log(`Suvadu UI running at http://localhost:${port}`);
   const { exec } = await import("node:child_process");
   exec(`open http://localhost:${port}`);

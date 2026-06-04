@@ -4,7 +4,7 @@ import fsPromises from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import type { LoadedConfig } from "../config/configLoader.js";
-import { loadConfig, repositoryFromConfig, saveConfig } from "../config/configLoader.js";
+import { initWorkspace, loadConfig, repositoryFromConfig, saveConfig } from "../config/configLoader.js";
 import { loadJiraCloudEnv, missingJiraCloudEnvVars } from "../config/env.js";
 import { loadGitHubAuth } from "../config/githubAuth.js";
 
@@ -30,7 +30,7 @@ export interface HttpServerOptions {
   port: number;
   staticDir: string;
   cliPath: string;
-  workspaceRoot: string;
+  initialCwd: string;
 }
 
 const CREDENTIALS_FILE = "credentials.json";
@@ -64,12 +64,18 @@ function injectCredentials(creds: StoredCredentials): void {
 }
 
 export async function serveHttp(
-  store: MemoryStore,
-  loaded: LoadedConfig,
+  initialStore: MemoryStore | null,
+  initialLoaded: LoadedConfig | null,
   options: HttpServerOptions
 ): Promise<http.Server> {
-  const creds = await loadCredentials(loaded.dataDir);
-  injectCredentials(creds);
+  // Mutable state — replaced after setup init
+  let store = initialStore;
+  let loaded = initialLoaded;
+
+  if (loaded) {
+    const creds = await loadCredentials(loaded.dataDir);
+    injectCredentials(creds);
+  }
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://localhost:${options.port}`);
@@ -89,6 +95,34 @@ export async function serveHttp(
         if (req.method === "POST") {
           body = await readJson(req);
         }
+
+        // Setup endpoints — always available
+        if (req.method === "GET" && url.pathname === "/api/setup/status") {
+          res.writeHead(200);
+          res.end(JSON.stringify({ configured: loaded !== null }));
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/api/setup/init") {
+          const { workspaceDir } = body as { workspaceDir: string };
+          if (!workspaceDir) throw new Error("workspaceDir is required");
+          const newLoaded = await initWorkspace(workspaceDir);
+          const newStore = new SqliteMemoryStore(newLoaded.dbPath);
+          await newStore.upsertWorkspace(newLoaded.workspace);
+          const creds = await loadCredentials(newLoaded.dataDir);
+          injectCredentials(creds);
+          loaded = newLoaded;
+          store = newStore;
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, workspaceRoot: newLoaded.workspaceRoot }));
+          return;
+        }
+
+        if (!store || !loaded) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ error: "Workspace not configured", code: "NOT_CONFIGURED" }));
+          return;
+        }
+
         const result = await handleApi(store, loaded, options, req.method ?? "GET", url.pathname, url.searchParams, body);
         res.writeHead(200);
         res.end(JSON.stringify(result));
@@ -261,7 +295,7 @@ async function addRepo(
   options: HttpServerOptions,
   body: { path: string; name?: string }
 ) {
-  const absolutePath = path.resolve(options.workspaceRoot, body.path);
+  const absolutePath = path.resolve(loaded.workspaceRoot, body.path);
   const name = body.name ?? path.basename(absolutePath);
 
   if (!(await isGitRepository(absolutePath))) {
@@ -274,7 +308,7 @@ async function addRepo(
   const detectedGitHub = await detectGitHubRemote(absolutePath);
   const { makeRepositoryConfig } = await import("../config/configLoader.js");
   const repositoryConfig = {
-    ...makeRepositoryConfig(options.workspaceRoot, name, absolutePath),
+    ...makeRepositoryConfig(loaded.workspaceRoot, name, absolutePath),
     ...(detectedGitHub ? {
       github: {
         host: detectedGitHub.host,
@@ -290,7 +324,7 @@ async function addRepo(
   };
   await saveConfig(loaded, nextConfig);
 
-  const updatedLoaded = await loadConfig(options.workspaceRoot);
+  const updatedLoaded = await loadConfig(loaded.workspaceRoot);
   await store.upsertRepository(repositoryFromConfig(updatedLoaded, repositoryConfig));
 
   // Mutate loaded in place so subsequent calls see the new repo
@@ -374,7 +408,7 @@ async function installClaudeCode(
   mcpServers.suvadu = {
     command: "node",
     args: [options.cliPath, "serve"],
-    cwd: options.workspaceRoot
+    cwd: loaded.workspaceRoot
   };
   settings.mcpServers = mcpServers;
   await fsPromises.mkdir(path.dirname(settingsPath), { recursive: true });

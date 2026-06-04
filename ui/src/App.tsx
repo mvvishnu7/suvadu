@@ -861,7 +861,133 @@ function RepoDetailPanel({ name }: { name: string }) {
   )
 }
 
+// ── Setup wizard ─────────────────────────────────────────────────────────────
+
+function SetupWizard({ onDone }: { onDone: () => void }) {
+  const [browse, setBrowse] = useState<BrowseResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [initialising, setInitialising] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function navigate(p: string) {
+    setLoading(true)
+    setSelected(null)
+    fetch(`/api/browse?path=${encodeURIComponent(p)}`)
+      .then(r => r.json())
+      .then((data: BrowseResult & { error?: string }) => {
+        if (data.error) { setError(data.error); return }
+        setBrowse(data)
+      })
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { navigate('~') }, [])
+
+  async function handleInit() {
+    if (!selected) return
+    setInitialising(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/setup/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceDir: selected })
+      })
+      const data = await res.json() as { ok?: boolean; error?: string }
+      if (!res.ok || data.error) throw new Error(data.error ?? 'Failed')
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setInitialising(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[var(--color-soil-sidebar)] flex items-center justify-center">
+      <div className="bg-stone-50 rounded-2xl shadow-xl w-[540px] max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-8 pt-8 pb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <img src="/favicon.svg" alt="Suvadu" className="w-8 h-8" />
+            <span className="text-xl font-semibold text-stone-900">Suvadu</span>
+          </div>
+          <h2 className="text-lg font-semibold text-stone-800 mb-1">Where do you keep your repositories?</h2>
+          <p className="text-sm text-stone-500">
+            Select the folder that contains the repos you want Suvadu to remember.
+            This becomes your workspace.
+          </p>
+        </div>
+
+        {/* Current path */}
+        <div className="px-8 py-2 border-t border-b border-stone-200 bg-white font-mono text-xs text-stone-400 truncate">
+          {browse?.current ?? '…'}
+        </div>
+
+        {/* Directory list */}
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          {loading && <p className="text-sm text-stone-400 px-4 py-3">Loading…</p>}
+          {!loading && browse && (
+            <ul className="space-y-0.5">
+              {browse.parent && (
+                <li>
+                  <button
+                    className="w-full text-left px-4 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-100 flex items-center gap-2"
+                    onClick={() => navigate(browse.parent!)}
+                  >
+                    <span>↑</span> ..
+                  </button>
+                </li>
+              )}
+              {browse.dirs.map(d => (
+                <li key={d.path}>
+                  <button
+                    className={`w-full text-left px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      selected === d.path
+                        ? 'bg-amber-100 text-amber-800 font-medium'
+                        : 'hover:bg-stone-100 text-stone-700'
+                    }`}
+                    onClick={() => setSelected(d.path === selected ? null : d.path)}
+                    onDoubleClick={() => navigate(d.path)}
+                  >
+                    <span className="text-stone-400">📁</span>
+                    <span className="flex-1 truncate">{d.name}</span>
+                    <span className="text-stone-300 text-xs shrink-0">double-click to open</span>
+                  </button>
+                </li>
+              ))}
+              {browse.dirs.length === 0 && (
+                <p className="text-sm text-stone-400 px-4 py-2">No subdirectories</p>
+              )}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer */}
+        {error && <p className="px-8 py-2 text-xs text-red-600">{error}</p>}
+        <div className="px-8 py-5 border-t border-stone-200 flex items-center justify-between gap-4">
+          <p className="text-xs text-stone-400 truncate flex-1">
+            {selected
+              ? `Workspace: ${selected}`
+              : 'Select a folder, or double-click to navigate into it'}
+          </p>
+          <button
+            onClick={handleInit}
+            disabled={!selected || initialising}
+            className="shrink-0 text-sm bg-amber-600 text-white px-5 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+          >
+            {initialising ? 'Setting up…' : 'Set up workspace'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const [configured, setConfigured] = useState<boolean | null>(null)
   const [status, setStatus] = useState<WorkspaceStatus | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [view, setView] = useState<'overview' | 'repo' | 'settings'>('overview')
@@ -872,11 +998,28 @@ export default function App() {
   function loadStatus() {
     fetch('/api/status')
       .then(r => r.json())
-      .then((data: WorkspaceStatus) => setStatus(data))
+      .then((data: WorkspaceStatus & { code?: string }) => {
+        if (data.code === 'NOT_CONFIGURED') return
+        setStatus(data)
+      })
       .catch(() => setError('Could not connect to Suvadu server.'))
   }
 
-  useEffect(() => { loadStatus() }, [])
+  useEffect(() => {
+    fetch('/api/setup/status')
+      .then(r => r.json())
+      .then((data: { configured: boolean }) => {
+        setConfigured(data.configured)
+        if (data.configured) loadStatus()
+      })
+      .catch(() => setError('Could not connect to Suvadu server.'))
+  }, [])
+
+  if (configured === null) return null // loading
+
+  if (configured === false) {
+    return <SetupWizard onDone={() => { setConfigured(true); loadStatus() }} />
+  }
 
   function selectRepo(name: string) {
     setSelected(name)
