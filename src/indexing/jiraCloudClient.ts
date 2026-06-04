@@ -70,7 +70,7 @@ export class JiraCloudClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async getIssueComments(key: string, maxComments = 50): Promise<JiraCloudComment[]> {
+  async getIssueComments(key: string, maxComments = 50, since?: string): Promise<JiraCloudComment[]> {
     const comments: JiraCloudComment[] = [];
     let startAt = 0;
     const maxResults = Math.min(50, maxComments);
@@ -87,8 +87,13 @@ export class JiraCloudClient {
       }
       const page = (await response.json()) as JiraCommentsPageResponse;
       const batch = page.comments ?? [];
+      let reachedSince = false;
       for (const raw of batch) {
         if (!raw.id) {
+          continue;
+        }
+        // Comments are ordered oldest-first; once we hit one older than `since` we can stop
+        if (since && raw.created && raw.created <= since) {
           continue;
         }
         const body = redactSecrets(extractAdfText(raw.body).slice(0, 2000));
@@ -103,10 +108,11 @@ export class JiraCloudClient {
           updated: raw.updated
         });
         if (comments.length >= maxComments) {
+          reachedSince = true;
           break;
         }
       }
-      if (batch.length < maxResults || comments.length >= maxComments) {
+      if (reachedSince || batch.length < maxResults || comments.length >= maxComments) {
         break;
       }
       startAt += batch.length;

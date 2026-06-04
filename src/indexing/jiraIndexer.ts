@@ -27,13 +27,32 @@ export async function indexJiraIssues(
 
   for (const key of keys) {
     try {
-      if (options.skipExistingKeys) {
-        const existing = await store.getNode(jiraNodeId(key));
-        if (existing?.properties.fetchedFromJiraCloud === true) {
-          fetchedIssues += 1;
-          continue;
+      const existing = await store.getNode(jiraNodeId(key));
+      const alreadyFetched = existing?.properties.fetchedFromJiraCloud === true;
+
+      if (options.skipExistingKeys && alreadyFetched) {
+        fetchedIssues += 1;
+        // Still refresh comments — fetch only new ones since last time
+        const issue = { key, url: existing.source?.url ?? "", title: existing.title ?? key };
+        const since = typeof existing.properties.commentsLastFetchedAt === "string"
+          ? existing.properties.commentsLastFetchedAt
+          : undefined;
+        const comments = await client.getIssueComments(key, 50, since);
+        for (const comment of comments) {
+          await saveJiraComment(store, repository, issue as JiraCloudIssue, comment);
         }
+        if (comments.length > 0) {
+          // Update commentsLastFetchedAt on the ticket node
+          await store.upsertNode({
+            ...existing,
+            properties: { ...existing.properties, commentsLastFetchedAt: nowIso() },
+            updatedAt: nowIso()
+          });
+        }
+        fetchedComments += comments.length;
+        continue;
       }
+
       const issue = await client.getIssue(key);
       if (!issue) {
         missingIssues.push(key);
@@ -46,6 +65,15 @@ export async function indexJiraIssues(
         await saveJiraComment(store, repository, issue, comment);
       }
       fetchedComments += comments.length;
+      // Record when we last fetched comments
+      const saved = await store.getNode(jiraNodeId(key));
+      if (saved) {
+        await store.upsertNode({
+          ...saved,
+          properties: { ...saved.properties, commentsLastFetchedAt: nowIso() },
+          updatedAt: nowIso()
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       warnings.push(`Could not fetch Jira issue ${key}: ${message}`);
