@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.claude/
+ui/node_modules/
+ui/dist/
+.suvadu/
+.engram/
+*.log
+.DS_Store
+PRODUCT.md

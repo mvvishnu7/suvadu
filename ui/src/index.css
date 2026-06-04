@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-soil-header: #2c1f14;  /* dark espresso — header */
+  --color-soil-sidebar: #3d2b1a; /* warm chestnut — sidebar, lighter than header */
+  --color-soil-border: #4e3623;  /* muted sienna — dividers inside dark surfaces */
+}
+
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #fafaf9;
+  color: #292524;
+}
+
+/* Matte scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #a8a29e; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #78716c; }

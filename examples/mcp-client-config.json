@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "suvadu": {
+      "command": "node",
+      "args": ["/absolute/path/to/suvadu/dist/src/cli/index.js", "serve"],
+      "cwd": "/absolute/path/to/your/workspace"
+    }
+  }
+}

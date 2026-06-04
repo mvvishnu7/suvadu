@@ -1,0 +1,49 @@
+{
+  "name": "suvadu",
+  "version": "0.1.0",
+  "description": "Long-term memory for AI coding agents — indexes git history, PRs, Jira, and review comments into local SQLite and exposes them over MCP.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Vishnu Viswambharan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mvvishnu7/suvadu.git"
+  },
+  "homepage": "https://github.com/mvvishnu7/suvadu#readme",
+  "keywords": [
+    "mcp",
+    "ai",
+    "coding-agent",
+    "memory",
+    "context",
+    "git",
+    "jira",
+    "github",
+    "claude",
+    "cursor",
+    "developer-tools"
+  ],
+  "bin": {
+    "suvadu": "./dist/src/cli/index.js"
+  },
+  "files": [
+    "dist/",
+    "ui/dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:ui": "cd ui && npm run build",
+    "build:all": "npm run build && npm run build:ui",
+    "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
+    "check": "npm run build"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

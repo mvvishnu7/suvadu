@@ -1,0 +1,29 @@
+{
+  "workspaceName": "default",
+  "repositories": [
+    {
+      "name": "payment-service",
+      "path": "./payment-service",
+      "github": {
+        "host": "github.com",
+        "owner": "company",
+        "repo": "payment-service"
+      }
+    }
+  ],
+  "jira": {
+    "baseUrl": "https://company.atlassian.net",
+    "projectKeys": ["PAY", "ABC"]
+  },
+  "indexing": {
+    "maxCommits": 1000,
+    "maxPullRequests": 200,
+    "includeReviewComments": true,
+    "includeAdrs": false,
+    "adrPaths": ["docs/adr", "docs/adrs", "architecture/decisions"]
+  },
+  "embeddings": {
+    "enabled": false,
+    "provider": "local"
+  }
+}
