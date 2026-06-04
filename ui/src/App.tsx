@@ -593,16 +593,19 @@ function OverviewPanel() {
       {/* Quick start */}
       <section>
         <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-3">Quick start</h2>
-        <div className="bg-stone-900 rounded-lg p-4 space-y-1 font-mono text-sm">
-          {[
-            'suvadu init',
-            'suvadu repo add ./my-service',
-            'suvadu repo index my-service',
-            'suvadu serve   # start MCP server for agents',
-            'suvadu ui      # this dashboard',
-          ].map(cmd => (
-            <div key={cmd} className="text-stone-300">{cmd}</div>
-          ))}
+        <div className="bg-stone-900 rounded-lg p-4 font-mono text-sm space-y-3">
+          <div className="space-y-1">
+            <div className="text-stone-500 text-xs mb-1">1. Install and launch the dashboard</div>
+            {['npm install -g suvadu', 'cd ~/my-repos', 'suvadu init', 'suvadu ui'].map(cmd => (
+              <div key={cmd} className="text-stone-300">{cmd}</div>
+            ))}
+          </div>
+          <div className="border-t border-stone-800 pt-3 space-y-1">
+            <div className="text-stone-500 text-xs mb-1">2. From the dashboard — add repos, configure sources, connect your agent</div>
+            <div className="text-stone-400 text-xs">Settings → add GitHub / Jira credentials</div>
+            <div className="text-stone-400 text-xs">Repositories → + Add → select a folder</div>
+            <div className="text-stone-400 text-xs">Connect Claude Code → writes MCP config automatically</div>
+          </div>
         </div>
       </section>
     </div>

@@ -38,35 +38,43 @@ npx suvadu --help
 
 ## Quick start
 
+### Using the dashboard (recommended)
+
 ```bash
-# 1. Initialize a workspace in the folder containing your repos
+cd ~/my-repos     # the folder containing your repositories
+suvadu init       # initialize a workspace here
+suvadu ui         # open the dashboard at http://localhost:7337
+```
+
+The dashboard walks you through everything:
+- Add repositories via the folder navigator
+- Configure GitHub and Jira credentials in Settings
+- Index repos and monitor their status
+- Connect Claude Code (or any MCP client) with one click
+
+### Using the CLI
+
+```bash
 cd ~/my-repos
 suvadu init
-
-# 2. Add and index a repository
 suvadu repo add ./my-service
 suvadu repo index my-service
-
-# 3. Start the dashboard (optional)
-suvadu ui
-
-# 4. Start the MCP server for agents
-suvadu serve
+suvadu serve      # start the MCP server for agents
 ```
 
 ## MCP client setup
 
 ### Claude Code
 
+Use `suvadu ui` → **Connect Claude Code** to configure this automatically.
+
+Or manually:
+
 ```bash
 claude mcp add suvadu --command suvadu --args serve --cwd /path/to/your/workspace
 ```
 
-Or use `suvadu ui` → **Connect Claude Code** to do this automatically.
-
 ### Other clients (Cursor, Windsurf, Zed)
-
-Add to your client's MCP config:
 
 ```json
 {
@@ -121,16 +129,6 @@ suvadu explain <repo> <path> --question "..."
 suvadu context <repo> --task "..." --file <path> [--compact] [--json]
 suvadu review <repo> --diff-summary "..." --file <path> [--compact] [--json]
 ```
-
-## Web dashboard
-
-`suvadu ui` starts a local dashboard at `http://localhost:7337`:
-
-- Browse indexed repositories and their file memories
-- Configure Jira and GitHub credentials
-- Add repos via folder navigator
-- Trigger indexing without the CLI
-- Connect Claude Code with one click
 
 ## Privacy
 
