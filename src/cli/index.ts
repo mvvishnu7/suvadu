@@ -516,7 +516,9 @@ async function uiCommand(args: string[], cwd: string): Promise<void> {
   await serveHttp(store, loaded, { port, staticDir, cliPath, initialCwd: cwd });
   console.log(`Suvadu UI running at http://localhost:${port}`);
   const { exec } = await import("node:child_process");
-  exec(`open http://localhost:${port}`);
+  const url = `http://localhost:${port}`;
+  const openCmd = process.platform === "win32" ? `start ${url}` : process.platform === "darwin" ? `open ${url}` : `xdg-open ${url}`;
+  exec(openCmd);
 }
 
 async function syncConfiguredRepositories(store: SqliteMemoryStore, loaded: Awaited<ReturnType<typeof loadConfig>>): Promise<void> {

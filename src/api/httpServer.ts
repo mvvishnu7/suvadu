@@ -254,6 +254,19 @@ async function handleApi(
     return runIndex(store, loaded, name, incremental);
   }
 
+  // GET /api/install/claude-code/status — detect config file path
+  if (method === "GET" && pathname === "/api/install/claude-code/status") {
+    const candidates = [
+      path.join(os.homedir(), ".claude.json"),
+      path.join(os.homedir(), ".claude", "settings.json")
+    ];
+    let detectedPath = candidates[1];
+    for (const c of candidates) {
+      try { await fsPromises.access(c); detectedPath = c; break; } catch { /* continue */ }
+    }
+    return { configFilePath: detectedPath };
+  }
+
   // POST /api/install/claude-code
   if (method === "POST" && pathname === "/api/install/claude-code") {
     return installClaudeCode(store, loaded, options);
@@ -393,10 +406,23 @@ async function installClaudeCode(
   loaded: LoadedConfig,
   options: HttpServerOptions
 ) {
-  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
   const results: string[] = [];
 
-  // 1. Write MCP server entry to ~/.claude/settings.json
+  // 1. Detect which Claude Code config file exists
+  const candidates = [
+    path.join(os.homedir(), ".claude.json"),           // newer Claude Code location
+    path.join(os.homedir(), ".claude", "settings.json") // older / documented location
+  ];
+  let settingsPath = candidates[1]; // default fallback
+  for (const candidate of candidates) {
+    try {
+      await fsPromises.access(candidate);
+      settingsPath = candidate;
+      break;
+    } catch { /* not found, try next */ }
+  }
+
+  // 2. Write MCP server entry
   let settings: Record<string, unknown> = {};
   try {
     const raw = await fsPromises.readFile(settingsPath, "utf8");
@@ -414,6 +440,7 @@ async function installClaudeCode(
   await fsPromises.mkdir(path.dirname(settingsPath), { recursive: true });
   await fsPromises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
   results.push(`Wrote MCP server config to ${settingsPath}`);
+  const configFilePath = settingsPath;
 
   // 2. Write CLAUDE.md snippet to each indexed repo
   const repos = await store.listRepositories(loaded.workspace.id);
@@ -436,7 +463,7 @@ async function installClaudeCode(
     results.push(`Updated CLAUDE.md in ${repo.name}`);
   }
 
-  return { ok: true, results };
+  return { ok: true, results, configFilePath };
 }
 
 function buildClaudeMdSnippet(loaded: LoadedConfig, repoNames: string[]): string {
@@ -495,7 +522,12 @@ async function getDoctorStatus(loaded: LoadedConfig) {
       note: githubAuth ? null : "Optional — set a token in Settings to index PRs and review comments"
     },
     mcp: {
-      configPath: `${process.env.HOME}/.claude/settings.json`,
+      configPath: (await (async () => {
+        for (const c of [path.join(os.homedir(), ".claude.json"), path.join(os.homedir(), ".claude", "settings.json")]) {
+          try { await fsPromises.access(c); return c; } catch { /* continue */ }
+        }
+        return path.join(os.homedir(), ".claude", "settings.json");
+      })()),
       note: "Run 'Connect Claude Code' in the UI or check Settings to configure MCP"
     }
   };

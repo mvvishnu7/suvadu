@@ -134,14 +134,23 @@ function InstallPanel({ onClose }: { onClose: () => void }) {
   const [installing, setInstalling] = useState(false)
   const [results, setResults] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [configFilePath, setConfigFilePath] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/install/claude-code/status')
+      .then(r => r.json())
+      .then((d: { configFilePath: string }) => setConfigFilePath(d.configFilePath))
+      .catch(() => {})
+  }, [])
 
   async function install() {
     setInstalling(true)
     setError(null)
     try {
       const res = await fetch('/api/install/claude-code', { method: 'POST' })
-      const data = await res.json() as { ok?: boolean; results?: string[]; error?: string }
+      const data = await res.json() as { ok?: boolean; results?: string[]; error?: string; configFilePath?: string }
       if (!res.ok || data.error) throw new Error(data.error ?? 'Failed')
+      if (data.configFilePath) setConfigFilePath(data.configFilePath)
       setResults(data.results ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -149,6 +158,10 @@ function InstallPanel({ onClose }: { onClose: () => void }) {
       setInstalling(false)
     }
   }
+
+  const configLabel = configFilePath
+    ? configFilePath.replace(/^\/Users\/[^/]+/, '~')
+    : '~/.claude/settings.json'
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
@@ -162,12 +175,14 @@ function InstallPanel({ onClose }: { onClose: () => void }) {
             <>
               <p className="text-sm text-stone-600">This will:</p>
               <ul className="space-y-1.5 text-sm text-stone-600">
-                {[
-                  'Add Suvadu as an MCP server in ~/.claude/settings.json',
-                  'Write a CLAUDE.md memory snippet into each indexed repo',
-                ].map(item => (
-                  <li key={item} className="flex gap-2"><span className="text-amber-500 mt-0.5">✓</span>{item}</li>
-                ))}
+                <li className="flex gap-2">
+                  <span className="text-amber-500 mt-0.5">✓</span>
+                  Add Suvadu as an MCP server in <code className="bg-stone-100 px-1 rounded text-xs ml-1">{configLabel}</code>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-amber-500 mt-0.5">✓</span>
+                  Write a CLAUDE.md memory snippet into each indexed repo
+                </li>
               </ul>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-2">
@@ -986,14 +1001,45 @@ function SetupWizard({ onDone }: { onDone: () => void }) {
   )
 }
 
+function parseHash(): { view: 'overview' | 'repo' | 'settings'; repo: string | null } {
+  const hash = window.location.hash.replace('#', '')
+  if (hash.startsWith('repo/')) return { view: 'repo', repo: decodeURIComponent(hash.slice(5)) }
+  if (hash === 'settings') return { view: 'settings', repo: null }
+  return { view: 'overview', repo: null }
+}
+
 export default function App() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [status, setStatus] = useState<WorkspaceStatus | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [view, setView] = useState<'overview' | 'repo' | 'settings'>('overview')
+
+  const initial = parseHash()
+  const [selected, setSelected] = useState<string | null>(initial.repo)
+  const [view, setView] = useState<'overview' | 'repo' | 'settings'>(initial.view)
   const [error, setError] = useState<string | null>(null)
   const [showNavigator, setShowNavigator] = useState(false)
   const [showInstall, setShowInstall] = useState(false)
+
+  // Keep URL hash in sync with view state
+  useEffect(() => {
+    if (view === 'repo' && selected) {
+      window.location.hash = `repo/${encodeURIComponent(selected)}`
+    } else if (view === 'settings') {
+      window.location.hash = 'settings'
+    } else {
+      window.location.hash = 'overview'
+    }
+  }, [view, selected])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    function onHashChange() {
+      const parsed = parseHash()
+      setView(parsed.view)
+      if (parsed.repo) setSelected(parsed.repo)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   function loadStatus() {
     fetch('/api/status')
