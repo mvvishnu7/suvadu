@@ -181,7 +181,11 @@ function InstallPanel({ onClose }: { onClose: () => void }) {
                 </li>
                 <li className="flex gap-2">
                   <span className="text-amber-500 mt-0.5">✓</span>
-                  Write a CLAUDE.md memory snippet into each indexed repo
+                  Write global instructions to <code className="bg-stone-100 px-1 rounded text-xs ml-1">~/.claude/CLAUDE.md</code> — Claude will use Suvadu in every session
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-amber-500 mt-0.5">✓</span>
+                  Write a repo-specific CLAUDE.md snippet into each indexed repo
                 </li>
               </ul>
               {error && <p className="text-xs text-red-600">{error}</p>}

@@ -442,7 +442,22 @@ async function installClaudeCode(
   results.push(`Wrote MCP server config to ${settingsPath}`);
   const configFilePath = settingsPath;
 
-  // 2. Write CLAUDE.md snippet to each indexed repo
+  // 3. Write global ~/.claude/CLAUDE.md so Suvadu works in every session
+  const globalClaudeMdPath = path.join(os.homedir(), ".claude", "CLAUDE.md");
+  const globalSnippet = buildGlobalClaudeMdSnippet(loaded.workspaceRoot);
+  const marker = "<!-- suvadu-memory -->";
+  const endMarker = "<!-- /suvadu-memory -->";
+  const globalBlock = `${marker}\n${globalSnippet}\n${endMarker}`;
+  let existingGlobal = "";
+  try { existingGlobal = await fsPromises.readFile(globalClaudeMdPath, "utf8"); } catch { /* new file */ }
+  const updatedGlobal = existingGlobal.includes(marker)
+    ? existingGlobal.replace(new RegExp(`${marker}[\\s\\S]*?${endMarker}`), globalBlock)
+    : existingGlobal ? `${existingGlobal}\n\n${globalBlock}` : globalBlock;
+  await fsPromises.mkdir(path.dirname(globalClaudeMdPath), { recursive: true });
+  await fsPromises.writeFile(globalClaudeMdPath, updatedGlobal);
+  results.push(`Updated global CLAUDE.md at ${globalClaudeMdPath}`);
+
+  // 4. Write CLAUDE.md snippet to each indexed repo
   const repos = await store.listRepositories(loaded.workspace.id);
   const indexedRepos = repos.filter(r => r.indexStatus === "indexed");
   for (const repo of indexedRepos) {
@@ -450,8 +465,6 @@ async function installClaudeCode(
     const snippet = buildClaudeMdSnippet(loaded, indexedRepos.map(r => r.name));
     let existing = "";
     try { existing = await fsPromises.readFile(claudeMdPath, "utf8"); } catch { /* new file */ }
-    const marker = "<!-- suvadu-memory -->";
-    const endMarker = "<!-- /suvadu-memory -->";
     const block = `${marker}\n${snippet}\n${endMarker}`;
     let updated: string;
     if (existing.includes(marker)) {
@@ -464,6 +477,32 @@ async function installClaudeCode(
   }
 
   return { ok: true, results, configFilePath };
+}
+
+function buildGlobalClaudeMdSnippet(workspaceRoot: string): string {
+  return `## Suvadu Memory
+
+Suvadu is a local memory tool that indexes your git history, PRs, Jira tickets, and review comments.
+The Suvadu MCP server is running for the workspace at \`${workspaceRoot}\`.
+
+**Always use Suvadu tools when working in indexed repositories:**
+
+Before editing any file — call \`suvadu.get_change_context\` with:
+- \`repo\`: the repository name (check the repo's CLAUDE.md for the exact name)
+- \`task\`: what you are about to change
+- \`files\`: the files you plan to edit
+
+Before finalizing a change or opening a PR — call \`suvadu.review_change\` with:
+- \`repo\`: the repository name
+- \`diffSummary\`: a concise description of what changed
+- \`files\`: the files you changed
+
+When you encounter a surprising parameter, method, or branch — call \`suvadu.explain_why_code_exists\` with:
+- \`repo\`: the repository name
+- \`filePath\`: the file containing the code
+- \`question\`: a specific why/how question
+
+If the repo is not indexed in Suvadu, skip these calls and proceed normally.`;
 }
 
 function buildClaudeMdSnippet(loaded: LoadedConfig, repoNames: string[]): string {
