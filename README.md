@@ -45,7 +45,7 @@ npx suvadu --help
 
 ```bash
 cd ~/my-repos     # the folder containing your repositories
-suvadu init       # initialize a workspace here
+suvadu quickstart # initialize a workspace and register a detected repo
 suvadu ui         # open the dashboard at http://localhost:7337
 ```
 
@@ -59,9 +59,7 @@ The dashboard walks you through everything:
 
 ```bash
 cd ~/my-repos
-suvadu init
-suvadu repo add ./my-service
-suvadu repo index my-service
+suvadu quickstart ./my-service --index
 suvadu serve      # start the MCP server for agents
 ```
 
@@ -116,6 +114,7 @@ Credentials are stored in `.suvadu/credentials.json` (gitignored) and can be set
 ## CLI reference
 
 ```
+suvadu quickstart [repo-path] [--index] # initialize, detect/register a repo, optionally index it
 suvadu init                       # initialize workspace
 suvadu repo add <path>            # register a repository
 suvadu repo list                  # list registered repos

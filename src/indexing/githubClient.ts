@@ -277,6 +277,9 @@ export class GitHubClient {
       }
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("GitHub returned 401. Refresh GitHub auth with `gh auth login` or set a valid token in Suvadu Settings.");
+      }
       throw new Error(`GitHub returned ${response.status}`);
     }
     return response.json();

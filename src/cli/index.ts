@@ -25,6 +25,10 @@ async function main(argv: string[], cwd: string): Promise<void> {
       await initCommand(rest, cwd);
       return;
     }
+    if (command === "quickstart") {
+      await quickstartCommand(rest, cwd);
+      return;
+    }
     if (command === "repo") {
       await repoCommand(rest, cwd);
       return;
@@ -77,6 +81,83 @@ async function initCommand(args: string[], cwd: string): Promise<void> {
   console.log(`Initialized Suvadu workspace "${loaded.config.workspaceName}"`);
   console.log(`Config: ${loaded.configPath}`);
   console.log(`Local database: ${loaded.dbPath}`);
+}
+
+async function quickstartCommand(args: string[], cwd: string): Promise<void> {
+  const workspaceName = optionValue(args, "--name") ?? "default";
+  const requestedRepoPath = optionValue(args, "--repo") ?? positionalArgs(args)[0];
+  const shouldIndex = hasFlag(args, "--index");
+  const loaded = await initWorkspace(cwd, workspaceName);
+  const store = new SqliteMemoryStore(loaded.dbPath);
+  await store.upsertWorkspace(loaded.workspace);
+
+  console.log("Suvadu quickstart");
+  console.log(`Workspace: ${loaded.workspaceRoot}`);
+  console.log(`Config: ${loaded.configPath}`);
+
+  const repoPath = requestedRepoPath
+    ? path.resolve(cwd, requestedRepoPath)
+    : await detectQuickstartRepository(cwd);
+
+  if (!repoPath) {
+    await store.close();
+    console.log("No git repository found here or in immediate subdirectories.");
+    console.log("Next:");
+    console.log("  suvadu repo add <path-to-git-repo>");
+    console.log("  suvadu repo index <repo-name>");
+    console.log("  suvadu ui");
+    return;
+  }
+
+  if (!(await isGitRepository(repoPath))) {
+    await store.close();
+    throw new Error(`Quickstart repo path is not a git repository: ${displayPathForQuickstart(loaded.workspaceRoot, repoPath)}`);
+  }
+
+  const name = optionValue(args, "--repo-name") ?? optionValue(args, "--repoName") ?? path.basename(repoPath);
+  const existingConfig = loaded.config.repositories.find((repo) => repo.name === name);
+  let activeRepositoryConfig = existingConfig;
+  if (!activeRepositoryConfig) {
+    const detectedGitHub = await detectGitHubRemote(repoPath);
+    activeRepositoryConfig = {
+      ...makeRepositoryConfig(loaded.workspaceRoot, name, repoPath),
+      ...(detectedGitHub ? { github: githubConfigFromRemote(detectedGitHub) } : {})
+    };
+    await saveConfig(loaded, {
+      ...loaded.config,
+      repositories: [...loaded.config.repositories, activeRepositoryConfig]
+    });
+    console.log(`Registered repo: ${name} (${activeRepositoryConfig.path})`);
+    if (detectedGitHub) {
+      console.log(`Detected GitHub remote: ${detectedGitHub.owner}/${detectedGitHub.repo}`);
+    }
+  } else {
+    console.log(`Repo already registered: ${name} (${activeRepositoryConfig.path})`);
+  }
+
+  const refreshed = await loadConfig(loaded.workspaceRoot);
+  const repositoryConfig = refreshed.config.repositories.find((repo) => repo.name === name);
+  if (!repositoryConfig) {
+    await store.close();
+    throw new Error(`Could not load registered repository "${name}".`);
+  }
+  const repository = repositoryFromConfig(refreshed, repositoryConfig);
+  await store.upsertRepository(repository);
+
+  const gitHubAuth = repositoryConfig.github ? await loadGitHubAuth() : null;
+  const missingJira = missingJiraCloudEnvVars(refreshed.config.jira?.baseUrl);
+  console.log(`GitHub enrichment: ${repositoryConfig.github ? gitHubAuth ? `ready via ${gitHubAuth.source}` : "remote detected, auth missing" : "no GitHub remote detected"}`);
+  console.log(`Jira enrichment: ${missingJira.length === 0 ? "ready" : "not configured"}`);
+
+  if (shouldIndex) {
+    await store.close();
+    await runRepoIndex(name, refreshed.workspaceRoot, { incremental: false });
+  } else {
+    await store.close();
+    console.log("Next:");
+    console.log(`  suvadu repo index ${name}`);
+    console.log("  suvadu ui");
+  }
 }
 
 async function repoCommand(args: string[], cwd: string): Promise<void> {
@@ -617,10 +698,38 @@ async function detectConfigurableGitHubRepos(loaded: Awaited<ReturnType<typeof l
   return names;
 }
 
+async function detectQuickstartRepository(cwd: string): Promise<string | null> {
+  if (await isGitRepository(cwd)) {
+    return cwd;
+  }
+  let entries;
+  try {
+    entries = await fs.readdir(cwd, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const directories = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => path.join(cwd, entry.name))
+    .sort();
+  for (const directory of directories) {
+    if (await isGitRepository(directory)) {
+      return directory;
+    }
+  }
+  return null;
+}
+
+function displayPathForQuickstart(workspaceRoot: string, repoPath: string): string {
+  const relative = path.relative(workspaceRoot, repoPath);
+  return relative && !relative.startsWith("..") ? relative : repoPath;
+}
+
 function printHelp(): void {
   console.log(`Suvadu - Long-term memory for AI coding agents
 
 Usage:
+  suvadu quickstart [repo-path] [--index]
   suvadu init [--name <workspace-name>]
   suvadu repo add <path> [--name <name>]
   suvadu repo list

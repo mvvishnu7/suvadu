@@ -28,6 +28,13 @@ export async function loadGitHubAuth(storedToken?: string): Promise<GitHubAuth |
 
 async function tokenFromGh(): Promise<string | null> {
   try {
+    const status = await execFileAsync("gh", ["auth", "status"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024
+    });
+    if (ghStatusReportsInvalidAuth(`${status.stdout}\n${status.stderr}`)) {
+      return null;
+    }
     const result = await execFileAsync("gh", ["auth", "token"], {
       encoding: "utf8",
       maxBuffer: 1024 * 1024
@@ -37,4 +44,8 @@ async function tokenFromGh(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function ghStatusReportsInvalidAuth(output: string): boolean {
+  return /\bfailed to log in\b/i.test(output) || /\btoken\b.*\binvalid\b/i.test(output);
 }

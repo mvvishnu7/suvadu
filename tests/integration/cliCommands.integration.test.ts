@@ -108,6 +108,55 @@ test("repo add auto-configures GitHub from origin remote", async () => {
   });
 });
 
+test("quickstart initializes workspace and registers a detected repo", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "suvadu-cli-quickstart-"));
+  const workspace = path.join(root, "workspace");
+  const repo = path.join(workspace, "payment-service");
+  await mkdir(repo, { recursive: true });
+  const env = await noGitHubAuthEnv(root);
+
+  await git(repo, ["init"]);
+  await git(repo, ["remote", "add", "origin", "https://github.com/acme/payment-service.git"]);
+
+  const quickstart = await cli(workspace, ["quickstart"], { env });
+  assert.match(quickstart.stdout, /Suvadu quickstart/);
+  assert.match(quickstart.stdout, /Registered repo: payment-service/);
+  assert.match(quickstart.stdout, /GitHub enrichment: remote detected, auth missing/);
+  assert.match(quickstart.stdout, /suvadu repo index payment-service/);
+
+  const config = JSON.parse(await readFile(path.join(workspace, ".suvadu.json"), "utf8"));
+  assert.equal(config.repositories[0].name, "payment-service");
+  assert.deepEqual(config.repositories[0].github, {
+    host: "github.com",
+    owner: "acme",
+    repo: "payment-service"
+  });
+});
+
+test("quickstart can index immediately", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "suvadu-cli-quickstart-index-"));
+  const workspace = path.join(root, "workspace");
+  const repo = path.join(workspace, "payment-service");
+  await mkdir(path.join(repo, "src"), { recursive: true });
+  const env = await noGitHubAuthEnv(root);
+
+  await git(repo, ["init"]);
+  await git(repo, ["config", "user.email", "suvadu@example.com"]);
+  await git(repo, ["config", "user.name", "Suvadu Test"]);
+  await writeFile(path.join(repo, "src/payment.ts"), "export const payment = true;\n", "utf8");
+  await git(repo, ["add", "."]);
+  await git(repo, ["commit", "-m", "PAY-813 add payment service"]);
+
+  const quickstart = await cli(workspace, ["quickstart", "--index"], { env });
+  assert.match(quickstart.stdout, /Registered repo: payment-service/);
+  assert.match(quickstart.stdout, /Indexing "payment-service"/);
+  assert.match(quickstart.stdout, /Indexed 1 files and 1 commits/);
+
+  const status = await cli(workspace, ["status"], { env });
+  assert.match(status.stdout, /Known repos: 1/);
+  assert.match(status.stdout, /Indexed repos: 1/);
+});
+
 test("repo index backfills GitHub config for already-added repos", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "suvadu-cli-github-backfill-"));
   const workspace = path.join(root, "workspace");
