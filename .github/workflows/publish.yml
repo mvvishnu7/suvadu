@@ -3,6 +3,8 @@ run-name: "Publish ${{ github.event.inputs.version }} by @${{ github.actor }}"
 
 on:
   workflow_dispatch:
+    branches:
+      - main
     inputs:
       version:
         description: 'Version bump (none to publish current version as-is)'
