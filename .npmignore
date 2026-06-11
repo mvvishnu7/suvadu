@@ -1,0 +1,13 @@
+src/
+ui/src/
+ui/public/
+ui/node_modules/
+node_modules/
+.suvadu/
+.claude/
+.github/
+*.test.ts
+tsconfig*.json
+vite.config.ts
+eslint.config.js
+PRODUCT.md
