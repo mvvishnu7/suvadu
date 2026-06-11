@@ -117,6 +117,15 @@ export async function serveHttp(
           return;
         }
 
+        // Browse endpoint — available in setup mode too
+        if (req.method === "GET" && url.pathname === "/api/browse") {
+          const dir = url.searchParams.get("path") ?? os.homedir();
+          const result = await browsedir(dir);
+          res.writeHead(200);
+          res.end(JSON.stringify(result));
+          return;
+        }
+
         if (!store || !loaded) {
           res.writeHead(200);
           res.end(JSON.stringify({ error: "Workspace not configured", code: "NOT_CONFIGURED" }));
