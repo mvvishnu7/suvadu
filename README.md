@@ -1,5 +1,8 @@
 # Suvadu
 
+[![npm version](https://img.shields.io/npm/v/suvadu)](https://www.npmjs.com/package/suvadu)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > *Suvadu* (சுவடு) — Tamil for **footprints**.
 
 Every commit, every PR, every review comment, every Jira ticket is a footprint — a trace of a decision someone made as they walked through your codebase. Suvadu collects those footprints so AI coding agents can follow the trail, not just read the current state of the ground.
