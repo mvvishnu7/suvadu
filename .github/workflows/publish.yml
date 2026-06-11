@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version bump (patch | minor | major)'
+        description: 'Version bump (none to publish current version as-is)'
         required: true
         default: 'patch'
         type: choice
         options:
+          - none
           - patch
           - minor
           - major
@@ -36,6 +37,7 @@ jobs:
         run: npm run build:all
 
       - name: Bump version
+        if: ${{ github.event.inputs.version != 'none' }}
         run: |
           git config user.email "mv.vishnu7@gmail.com"
           git config user.name "Vishnu Viswambharan"
@@ -47,4 +49,5 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Push version commit and tag
+        if: ${{ github.event.inputs.version != 'none' }}
         run: git push --follow-tags
