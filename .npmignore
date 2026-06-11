@@ -1,13 +1,2 @@
-src/
-ui/src/
-ui/public/
-ui/node_modules/
-node_modules/
-.suvadu/
-.claude/
-.github/
-*.test.ts
-tsconfig*.json
-vite.config.ts
-eslint.config.js
-PRODUCT.md
+# Ignore everything by default, then the files field in package.json controls what's included.
+# This file must exist so npm doesn't fall back to .gitignore (which excludes ui/dist and dist/).

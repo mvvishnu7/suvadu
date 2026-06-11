@@ -1,0 +1,1 @@
+# Intentionally empty — prevents npm from using ui/.gitignore which excludes dist/
