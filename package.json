@@ -1,6 +1,6 @@
 {
   "name": "suvadu",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Long-term memory for AI coding agents — indexes git history, PRs, Jira, and review comments into local SQLite and exposes them over MCP.",
   "type": "module",
   "license": "MIT",
