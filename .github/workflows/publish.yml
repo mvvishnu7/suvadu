@@ -23,6 +23,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
+      workflows: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
