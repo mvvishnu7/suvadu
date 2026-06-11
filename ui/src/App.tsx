@@ -883,14 +883,25 @@ function RepoDetailPanel({ name }: { name: string }) {
 // ── Setup wizard ─────────────────────────────────────────────────────────────
 
 function SetupWizard({ onDone }: { onDone: () => void }) {
+  const [suggestedDir, setSuggestedDir] = useState<string | null>(null)
+  const [showPicker, setShowPicker] = useState(false)
   const [browse, setBrowse] = useState<BrowseResult | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loadingBrowse, setLoadingBrowse] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [initialising, setInitialising] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    fetch('/api/setup/status')
+      .then(r => r.json())
+      .then((d: { configured: boolean; suggestedDir?: string }) => {
+        if (d.suggestedDir) setSuggestedDir(d.suggestedDir)
+      })
+      .catch(() => {})
+  }, [])
+
   function navigate(p: string) {
-    setLoading(true)
+    setLoadingBrowse(true)
     setSelected(null)
     fetch(`/api/browse?path=${encodeURIComponent(p)}`)
       .then(r => r.json())
@@ -899,20 +910,22 @@ function SetupWizard({ onDone }: { onDone: () => void }) {
         setBrowse(data)
       })
       .catch(e => setError(String(e)))
-      .finally(() => setLoading(false))
+      .finally(() => setLoadingBrowse(false))
   }
 
-  useEffect(() => { navigate('~') }, [])
+  function openPicker() {
+    setShowPicker(true)
+    navigate(suggestedDir ?? '~')
+  }
 
-  async function handleInit() {
-    if (!selected) return
+  async function handleInit(dir: string) {
     setInitialising(true)
     setError(null)
     try {
       const res = await fetch('/api/setup/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceDir: selected })
+        body: JSON.stringify({ workspaceDir: dir })
       })
       const data = await res.json() as { ok?: boolean; error?: string }
       if (!res.ok || data.error) throw new Error(data.error ?? 'Failed')
@@ -924,6 +937,8 @@ function SetupWizard({ onDone }: { onDone: () => void }) {
     }
   }
 
+  const workspaceDir = selected ?? suggestedDir
+
   return (
     <div className="min-h-screen bg-[var(--color-soil-sidebar)] flex items-center justify-center">
       <div className="bg-stone-50 rounded-2xl shadow-xl w-[540px] max-h-[85vh] flex flex-col overflow-hidden">
@@ -933,73 +948,93 @@ function SetupWizard({ onDone }: { onDone: () => void }) {
             <img src="/favicon.svg" alt="Suvadu" className="w-8 h-8" />
             <span className="text-xl font-semibold text-stone-900">Suvadu</span>
           </div>
-          <h2 className="text-lg font-semibold text-stone-800 mb-1">Where do you keep your repositories?</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mb-1">Set up your workspace</h2>
           <p className="text-sm text-stone-500">
-            Select the folder that contains the repos you want Suvadu to remember.
-            This becomes your workspace.
+            Suvadu will use this folder as your workspace — the directory that contains your repositories.
           </p>
         </div>
 
-        {/* Current path */}
-        <div className="px-8 py-2 border-t border-b border-stone-200 bg-white font-mono text-xs text-stone-400 truncate">
-          {browse?.current ?? '…'}
-        </div>
-
-        {/* Directory list */}
-        <div className="flex-1 overflow-y-auto px-4 py-2">
-          {loading && <p className="text-sm text-stone-400 px-4 py-3">Loading…</p>}
-          {!loading && browse && (
-            <ul className="space-y-0.5">
-              {browse.parent && (
-                <li>
-                  <button
-                    className="w-full text-left px-4 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-100 flex items-center gap-2"
-                    onClick={() => navigate(browse.parent!)}
-                  >
-                    <span>↑</span> ..
-                  </button>
-                </li>
+        {!showPicker ? (
+          /* Confirm screen */
+          <div className="px-8 pb-8 flex flex-col gap-4">
+            <div className="bg-white border border-stone-200 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-stone-400">📁</span>
+              <span className="font-mono text-sm text-stone-700 truncate flex-1">{workspaceDir ?? '…'}</span>
+            </div>
+            <button
+              onClick={openPicker}
+              className="text-xs text-stone-400 hover:text-stone-600 text-left underline"
+            >
+              Choose a different folder
+            </button>
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <button
+              onClick={() => workspaceDir && handleInit(workspaceDir)}
+              disabled={!workspaceDir || initialising}
+              className="w-full text-sm bg-amber-600 text-white px-5 py-2.5 rounded-lg hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+            >
+              {initialising ? 'Setting up…' : 'Set up workspace'}
+            </button>
+          </div>
+        ) : (
+          /* Folder picker */
+          <>
+            <div className="px-8 py-2 border-t border-b border-stone-200 bg-white font-mono text-xs text-stone-400 truncate">
+              {browse?.current ?? '…'}
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+              {loadingBrowse && <p className="text-sm text-stone-400 px-4 py-3">Loading…</p>}
+              {!loadingBrowse && browse && (
+                <ul className="space-y-0.5">
+                  {browse.parent && (
+                    <li>
+                      <button
+                        className="w-full text-left px-4 py-2 rounded-lg text-sm text-stone-500 hover:bg-stone-100 flex items-center gap-2"
+                        onClick={() => navigate(browse.parent!)}
+                      >
+                        <span>↑</span> ..
+                      </button>
+                    </li>
+                  )}
+                  {browse.dirs.map(d => (
+                    <li key={d.path}>
+                      <button
+                        className={`w-full text-left px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                          selected === d.path
+                            ? 'bg-amber-100 text-amber-800 font-medium'
+                            : 'hover:bg-stone-100 text-stone-700'
+                        }`}
+                        onClick={() => setSelected(d.path === selected ? null : d.path)}
+                        onDoubleClick={() => navigate(d.path)}
+                      >
+                        <span className="text-stone-400">📁</span>
+                        <span className="flex-1 truncate">{d.name}</span>
+                        <span className="text-stone-300 text-xs shrink-0">double-click to open</span>
+                      </button>
+                    </li>
+                  ))}
+                  {browse.dirs.length === 0 && (
+                    <p className="text-sm text-stone-400 px-4 py-2">No subdirectories</p>
+                  )}
+                </ul>
               )}
-              {browse.dirs.map(d => (
-                <li key={d.path}>
-                  <button
-                    className={`w-full text-left px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors ${
-                      selected === d.path
-                        ? 'bg-amber-100 text-amber-800 font-medium'
-                        : 'hover:bg-stone-100 text-stone-700'
-                    }`}
-                    onClick={() => setSelected(d.path === selected ? null : d.path)}
-                    onDoubleClick={() => navigate(d.path)}
-                  >
-                    <span className="text-stone-400">📁</span>
-                    <span className="flex-1 truncate">{d.name}</span>
-                    <span className="text-stone-300 text-xs shrink-0">double-click to open</span>
-                  </button>
-                </li>
-              ))}
-              {browse.dirs.length === 0 && (
-                <p className="text-sm text-stone-400 px-4 py-2">No subdirectories</p>
-              )}
-            </ul>
-          )}
-        </div>
-
-        {/* Footer */}
-        {error && <p className="px-8 py-2 text-xs text-red-600">{error}</p>}
-        <div className="px-8 py-5 border-t border-stone-200 flex items-center justify-between gap-4">
-          <p className="text-xs text-stone-400 truncate flex-1">
-            {selected
-              ? `Workspace: ${selected}`
-              : 'Select a folder, or double-click to navigate into it'}
-          </p>
-          <button
-            onClick={handleInit}
-            disabled={!selected || initialising}
-            className="shrink-0 text-sm bg-amber-600 text-white px-5 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
-          >
-            {initialising ? 'Setting up…' : 'Set up workspace'}
-          </button>
-        </div>
+            </div>
+            {error && <p className="px-8 py-2 text-xs text-red-600">{error}</p>}
+            <div className="px-8 py-5 border-t border-stone-200 flex items-center justify-between gap-4">
+              <p className="text-xs text-stone-400 truncate flex-1">
+                {selected ? `Selected: ${selected}` : 'Single-click to select, double-click to open'}
+              </p>
+              <button onClick={() => setShowPicker(false)} className="text-sm text-stone-500 hover:text-stone-700 px-3 py-1.5">Back</button>
+              <button
+                onClick={() => selected && handleInit(selected)}
+                disabled={!selected || initialising}
+                className="shrink-0 text-sm bg-amber-600 text-white px-5 py-2 rounded-lg hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+              >
+                {initialising ? 'Setting up…' : 'Use this folder'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -99,7 +99,7 @@ export async function serveHttp(
         // Setup endpoints — always available
         if (req.method === "GET" && url.pathname === "/api/setup/status") {
           res.writeHead(200);
-          res.end(JSON.stringify({ configured: loaded !== null }));
+          res.end(JSON.stringify({ configured: loaded !== null, suggestedDir: options.initialCwd }));
           return;
         }
         if (req.method === "POST" && url.pathname === "/api/setup/init") {
